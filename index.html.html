@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#F2EEE3">
+<title>ZENCRYPT — Local File Vault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --paper:#F2EEE3; --ink:#181510;
+    --soft:rgba(24,21,16,.56);
+    --line:rgba(24,21,16,.15); --line-2:rgba(24,21,16,.38);
+    --red:#C13A18;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --serif:'Instrument Serif',Georgia,serif;
+    --ease:cubic-bezier(.22,1,.36,1);
+  }
+  [hidden]{display:none!important}
+  html{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+  body{background:var(--paper);color:var(--ink);font:400 14px/1.5 var(--mono);-webkit-font-smoothing:antialiased;min-height:100vh}
+  body.gated{overflow:hidden}
+  ::selection{background:var(--red);color:var(--paper)}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input{font:inherit;color:inherit}
+  :focus-visible{outline:1px dashed var(--red);outline-offset:3px}
+  /* paper grain */
+  body::after{content:"";position:fixed;inset:0;z-index:900;pointer-events:none;opacity:.05;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+  /* ---------- shared rail ---------- */
+  .rail{position:fixed;top:0;bottom:0;left:0;width:62px;border-right:1px solid var(--line);
+    display:flex;flex-direction:column;align-items:center;justify-content:space-between;
+    padding:1.3rem 0;z-index:20;background:var(--paper)}
+  .rail-tag{writing-mode:vertical-rl;transform:rotate(180deg);font-size:9.5px;letter-spacing:.34em;color:var(--soft);white-space:nowrap}
+  .rail-seal{width:11px;height:11px;background:var(--red)}
+  .gate,.vault{padding-left:62px}
+
+  /* ---------- gate ---------- */
+  .gate{position:fixed;inset:0;background:var(--paper);z-index:100;display:flex}2
+  .gate.off{display:none}
+  .gate-inner{flex:1;display:flex;flex-direction:column;min-width:0;padding:1.4rem clamp(1.2rem,4vw,2.6rem);
+    overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
+  .gate-top,.gate-foot{display:flex;justify-content:space-between;gap:1rem;font-size:10px;letter-spacing:.28em;color:var(--soft)}
+  .gate-top{position:sticky;top:0;z-index:5;background:var(--paper);padding-bottom:1.2rem;border-bottom:1px solid var(--line)}
+  .gate-foot{position:sticky;bottom:0;z-index:5;background:var(--paper);padding-top:1.2rem;border-top:1px solid var(--line)}
+  .gate-mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2rem;padding:1.6rem 0;min-height:calc(100vh - 3.6rem)}
+  .gate-inner>*{animation:rise .8s var(--ease) both}
+  .gate-mid{animation-delay:.12s}.gate-seal{animation-delay:.2s}.gate-foot{animation-delay:.26s}
+  @keyframes rise{from{opacity:0;transform:translateY(12px)}}
+
+  .ring-wrap{position:relative;width:min(58vmin,470px);max-width:86vw;aspect-ratio:1}
+  #ring{position:absolute;inset:0;width:100%;height:100%}
+  #ring circle{fill:none;stroke:var(--line);stroke-width:1}
+  #ring .c-d1{stroke:var(--line-2);stroke-dasharray:.6 6.5;stroke-linecap:round;stroke-width:1.5}
+  #ring line{stroke:var(--line);stroke-width:1}
+  #ring .cross line{stroke:var(--line-2)}
+  #ring .tk-a{stroke:var(--line-2)}
+  #ring text{font-family:var(--mono);font-size:12.5px;fill:var(--soft);transition:fill .25s}
+  #ring text.hot,#gate.deny #ring text{fill:var(--red)}
+  .wordmark{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center}
+  .wordmark h1{font:400 clamp(1.9rem,8.4vmin,3.5rem)/1 var(--serif);letter-spacing:.04em}
+  .red{color:var(--red)}
+  .wm-sub{margin-top:1rem;font-size:9.5px;letter-spacing:.42em;color:var(--soft)}
+
+  .key-form{width:min(340px,86vw)}
+  .key-form label{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.3em;color:var(--soft);margin-bottom:.7rem}
+  .key-form label b{color:var(--red);font-weight:400}
+  .key-row{display:flex;align-items:stretch;border-bottom:1px solid var(--line-2);transition:border-color .25s}
+  .key-row:focus-within{border-color:var(--red)}
+  .key-row input{flex:1;min-width:0;background:none;border:0;padding:.85rem 0;font-size:14px;letter-spacing:.3em}
+  .key-row input::placeholder{color:var(--soft);letter-spacing:.2em}
+  .key-row input:focus{outline:none}
+  .kbtn{width:46px;display:grid;place-items:center;border-left:1px solid var(--line);transition:background .2s,color .2s}
+  .kbtn svg{width:16px;height:16px}
+  .kbtn:hover{background:var(--ink);color:var(--paper)}
+  .kbtn.go:hover{background:var(--red)}
+  .kbtn.busy svg{animation:rot 1s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .key-error{min-height:1.5em;margin-top:.7rem;font-size:10.5px;letter-spacing:.18em;color:var(--red)}
+  .key-hint{margin-top:.3rem;font-size:10px;letter-spacing:.18em;color:var(--soft)}
+  .key-form.shake{animation:shake .4s}
+  @keyframes shake{20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
+
+  /* ---------- gate: seal section ---------- */
+  .gate-seal{padding:1.4rem 0 3rem}
+  .gs-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;padding-bottom:1rem}
+  .gs-head h3{font:italic 400 1.5rem var(--serif)}
+  .gs-head span{font-size:10px;letter-spacing:.26em;color:var(--soft)}
+  .gs-note{margin-top:1.1rem;text-align:center;font-size:9.5px;letter-spacing:.24em;color:var(--soft)}
+  .grows{margin-top:1.4rem;border-top:1px solid var(--line-2)}
+  .grow{display:flex;align-items:center;gap:.7rem;padding:.6rem .1rem;border-bottom:1px solid var(--line);animation:rowIn .5s var(--ease) both}
+  .g-dot{width:7px;height:7px;background:var(--red);flex:none}
+  .grow.pend .g-dot{background:transparent;border:1px solid var(--red);animation:pulse 1s infinite}
+  .g-name{flex:1;min-width:0;font-weight:500;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .g-chip{flex:none;font-size:8.5px;letter-spacing:.14em;border:1px solid var(--line-2);padding:.18rem .38rem;color:var(--soft)}
+  .g-size{flex:none;font-size:10.5px;color:var(--soft)}
+  .g-state{flex:none;font-size:8.5px;letter-spacing:.2em;color:var(--red)}
+  .grow.pend .g-state{color:var(--soft);animation:pulse 1s infinite}
+
+  /* ---------- vault doors ---------- */
+  .door{position:fixed;left:0;right:0;height:50.5vh;background:var(--ink);z-index:300;
+    transition:transform .72s cubic-bezier(.8,0,.2,1)}
+  .d-top{top:0;transform:translateY(-102%);border-bottom:1px solid rgba(242,238,227,.12)}
+  .d-bot{bottom:0;transform:translateY(102%);border-top:1px solid rgba(242,238,227,.12)}
+  body.doors-closed .door{transform:translateY(0)}
+  .door i{position:absolute;left:50%;font:500 9px var(--mono);font-style:normal;letter-spacing:.5em;color:rgba(242,238,227,.28);white-space:nowrap}
+  .d-top i{bottom:18px;transform:translateX(-50%)}
+  .d-bot i{top:18px;transform:translateX(-50%)}
+  .d-top::after{content:"";position:absolute;left:50%;bottom:-5px;width:9px;height:9px;background:var(--red);
+    transform:translateX(-50%) rotate(45deg);opacity:0;transition:opacity .2s .35s}
+  body.doors-closed .d-top::after{opacity:1}
+
+  /* ---------- stamp ---------- */
+  .stamp{position:fixed;inset:0;z-index:250;display:grid;place-items:center;pointer-events:none}
+  .stamp-inner{border:2px solid var(--red);outline:1px solid var(--red);outline-offset:4px;color:var(--red);
+    padding:.9em 1.4em .9em 1.9em;font-weight:700;font-size:clamp(.9rem,2vw,1.15rem);letter-spacing:.4em;
+    transform:rotate(-7deg);opacity:0;background:var(--paper)}
+  .stamp.show .stamp-inner{animation:stampIn .5s cubic-bezier(.2,1.5,.35,1) forwards}
+  @keyframes stampIn{0%{opacity:0;transform:rotate(3deg) scale(1.9)}55%{opacity:1}100%{opacity:1;transform:rotate(-7deg) scale(1)}}
+
+  /* ---------- vault ---------- */
+  .vault{min-height:100vh}
+  .vault-inner{max-width:1140px;margin:0 auto;padding:0 clamp(1.1rem,4vw,3rem) 3rem}
+  .vault .rv{opacity:0;transform:translateY(16px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+  .vault.in .rv{opacity:1;transform:none}
+
+  .v-top{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.15rem 0;border-bottom:1px solid var(--line)}
+  .brand{font:400 1.35rem var(--serif);letter-spacing:.05em}
+  .v-status{display:flex;align-items:center;gap:.6rem;font-size:10px;letter-spacing:.26em;color:var(--soft)}
+  .v-status .sq-dot{width:7px;height:7px;background:var(--red);animation:pulse 2.2s infinite}
+  .v-status time{color:var(--ink);letter-spacing:.12em}
+  @keyframes pulse{50%{opacity:.3}}
+  .lock-btn{display:flex;align-items:center;gap:.55rem;border:1px solid var(--line-2);padding:.55rem .95rem;font-size:10px;letter-spacing:.26em;transition:.22s}
+  .lock-btn svg{width:13px;height:13px}
+  .lock-btn:hover{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+  .hero{display:grid;grid-template-columns:1.15fr .85fr;gap:clamp(1.5rem,4vw,4rem);align-items:end;padding:clamp(2.4rem,6vh,4.2rem) 0 2.6rem}
+  .hero h2{font:400 clamp(2.5rem,5.4vw,4.4rem)/1.04 var(--serif)}
+  .hero h2 em{font-style:italic}
+  .sq-mark{display:inline-block;width:.4em;height:.4em;background:var(--red);margin-left:.14em}
+  .hero-side{border-left:1px solid var(--line);padding-left:clamp(1.2rem,2.5vw,2.2rem)}
+  .hero-side>p{font-size:12px;line-height:1.75;color:var(--soft);max-width:40ch}
+  .stats{margin-top:1.6rem}
+  .stat{display:flex;align-items:baseline;justify-content:space-between;border-top:1px solid var(--line);padding:.55rem .1rem .5rem}
+  .stat b{font:400 1.9rem/1 var(--serif)}
+  .stat span{font-size:9.5px;letter-spacing:.26em;color:var(--soft)}
+
+  .dz{position:relative;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);
+    padding:clamp(2.2rem,5vh,3.4rem) 1rem;text-align:center;cursor:pointer;user-select:none;
+    transition:background .25s,color .25s}
+  .dz:hover{background:rgba(24,21,16,.035)}
+  .dz.over{background:var(--ink);color:var(--paper)}
+  .dz-big{font:400 clamp(1.9rem,3.6vw,2.9rem)/1.1 var(--serif)}
+  .dz-big em{font-style:italic}
+  .dz-sub{margin-top:.9rem;font-size:10px;letter-spacing:.3em;color:var(--soft)}
+  .dz.over .dz-sub{color:rgba(242,238,227,.6)}
+  .dz-mark{position:absolute;font-size:13px;line-height:1;color:var(--soft)}
+  .dz.over .dz-mark{color:rgba(242,238,227,.5)}
+  .m1{top:9px;left:14px}.m2{top:9px;right:14px}.m3{bottom:9px;left:14px}.m4{bottom:9px;right:14px}
+
+  .ledger-top{display:flex;align-items:baseline;justify-content:space-between;padding:2.4rem 0 1rem}
+  .ledger-top h3{font:italic 400 1.5rem var(--serif)}
+  .ledger-top span{font-size:10px;letter-spacing:.26em;color:var(--soft)}
+  .lhead,.row{display:grid;grid-template-columns:3.4rem minmax(0,1fr) 9.5rem 5.5rem 7.2rem 5.6rem;gap:1rem;align-items:center}
+  .lhead{padding:.55rem .35rem;border-bottom:1px solid var(--line-2);font-size:9.5px;letter-spacing:.22em;color:var(--soft)}
+  .row{position:relative;padding:.85rem .35rem;border-bottom:1px solid var(--line);animation:rowIn .5s var(--ease) both}
+  @keyframes rowIn{from{opacity:0;transform:translateY(8px)}}
+  .row:hover{background:rgba(24,21,16,.03)}
+  .row:hover::before{content:"";position:absolute;left:0;top:-1px;bottom:-1px;width:2px;background:var(--red)}
+  .row.gone{opacity:0;height:0!important;padding-top:0!important;padding-bottom:0!important;border-bottom-color:transparent!important;overflow:hidden}
+  .c-idx{font-size:11px;color:var(--soft)}
+  .c-file{display:flex;align-items:center;gap:.6rem;min-width:0}
+  .f-dot{width:7px;height:7px;background:var(--red);flex:none}
+  .f-dot.pend{background:transparent;border:1px solid var(--red);animation:pulse 1s infinite}
+  .f-name{font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .f-chip{flex:none;font-size:8.5px;letter-spacing:.14em;border:1px solid var(--line-2);padding:.18rem .38rem;color:var(--soft)}
+  .f-state{flex:none;font-size:8.5px;letter-spacing:.2em;color:var(--red)}
+  .f-state.pend{color:var(--soft);animation:pulse 1s infinite}
+  .c-hash{font-size:11px;color:var(--soft);letter-spacing:.06em;white-space:nowrap}
+  .c-size,.c-date{font-size:11px;color:var(--soft);white-space:nowrap}
+  .c-act{display:flex;gap:.4rem;justify-content:flex-end}
+  .act{width:31px;height:31px;display:grid;place-items:center;border:1px solid transparent;transition:.2s}
+  .act svg{width:14.5px;height:14.5px}
+  .act:hover{border-color:var(--line-2)}
+  .act.danger:hover{border-color:var(--red);color:var(--red)}
+  .act.cf-yes{width:auto;padding:0 .5rem;font-size:10px;letter-spacing:.1em;color:var(--red)}
+  .act.cf-yes:hover{border-color:var(--red)}
+  .cf-label{font-size:9.5px;letter-spacing:.2em;color:var(--soft);margin-right:.2rem}
+  .empty{padding:3.4rem 0 3rem;text-align:center}
+  .empty h4{font:italic 400 2rem var(--serif);color:var(--soft)}
+  .empty p{margin-top:.9rem;font-size:10px;letter-spacing:.28em;color:var(--soft)}
+  .v-foot{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;border-top:1px solid var(--line-2);
+    margin-top:2.6rem;padding-top:1rem;font-size:9.5px;letter-spacing:.22em;color:var(--soft)}
+
+  /* ---------- toasts ---------- */
+  .toasts{position:fixed;right:1.1rem;bottom:1.1rem;z-index:950;display:flex;flex-direction:column;gap:.55rem;align-items:flex-end}
+  .toast{display:flex;align-items:center;gap:.65rem;background:var(--paper);border:1px solid var(--line-2);
+    padding:.75rem 1rem;font-size:10.5px;letter-spacing:.12em;box-shadow:0 14px 34px rgba(24,21,16,.14);
+    transform:translateY(10px);opacity:0;transition:.35s var(--ease);max-width:min(86vw,380px)}
+  .toast.show{transform:none;opacity:1}
+  .toast svg{width:13px;height:13px;flex:none}
+  .toast.err{border-color:var(--red)}
+  .toast.err svg{color:var(--red)}
+
+  /* ---------- responsive ---------- */
+  @media(max-width:1000px){
+    .lhead,.row{grid-template-columns:3rem minmax(0,1fr) 5.2rem 5.4rem}
+    .c-hash,.c-date{display:none}
+  }
+  @media(max-width:860px){
+    .rail{display:none}
+    .gate,.vault{padding-left:0}
+  }
+  @media(max-width:640px){
+    .lhead,.row{grid-template-columns:1.9rem minmax(0,1fr) 4.8rem}
+    .c-size{display:none}
+    .hero{grid-template-columns:1fr}
+    .hero-side{border-left:0;border-top:1px solid var(--line);padding:1.6rem 0 0}
+    .v-status{display:none}
+  }
+  @media(max-height:640px){
+    .ring-wrap{width:min(42vmin,300px)}
+    .wm-sub{display:none}
+    .gate-mid{gap:1.2rem}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  }
+</style>
+</head>
+<body class="gated">
+
+  <!-- vault doors -->
+  <div class="door d-top"><i>ZENCRYPT — VAULT DOOR 01</i></div>
+  <div class="door d-bot"><i>ZENCRYPT — VAULT DOOR 02</i></div>
+
+  <!-- stamp -->
+  <div class="stamp" id="stamp" hidden><div class="stamp-inner">ACCESS GRANTED</div></div>
+
+  <!-- left rail -->
+  <aside class="rail" aria-hidden="true">
+    <span class="rail-tag">ENCRYPTED FILE VAULT — EST. MMXXV</span>
+    <span class="rail-seal"></span>
+  </aside>
+
+  <!-- ============ GATE ============ -->
+  <section class="gate" id="gate">
+    <div class="gate-inner">
+      <header class="gate-top">
+        <span>ZENCRYPT SYSTEMS — LOCAL VAULT Nº 001</span>
+        <span>LOCAL <time id="gateClock">--:--:--</time></span>
+      </header>
+
+      <div class="gate-mid">
+        <div class="ring-wrap">
+          <svg id="ring" viewBox="-230 -230 460 460" aria-hidden="true">
+            <circle r="224"/><circle r="199" class="c-d1"/>
+            <circle r="150"/><circle r="122" class="c-d1"/>
+            <g class="cross">
+              <line x1="-152" x2="-188"/><line x1="152" x2="188"/>
+              <line y1="-152" y2="-188"/><line y1="152" y2="188"/>
+            </g>
+            <g id="gTicks"></g>
+            <g id="gChars"></g>
+          </svg>
+          <div class="wordmark">
+            <h1>ZEN<span class="red">·</span>CRYPT</h1>
+            <span class="wm-sub">LOCAL ENCRYPTION VAULT</span>
+          </div>
+        </div>
+
+        <form class="key-form" id="keyForm" autocomplete="off" novalidate>
+          <label for="keyInput"><span>ACCESS KEY</span><b>*</b></label>
+          <div class="key-row">
+            <input id="keyInput" type="password" placeholder="········" autocomplete="off"
+                   autocapitalize="off" spellcheck="false" aria-label="Access key">
+            <button type="button" class="kbtn" id="eyeBtn" title="Show / hide key" aria-label="Show or hide key"></button>
+            <button type="submit" class="kbtn go" id="goBtn" title="Unlock vault" aria-label="Unlock vault"></button>
+          </div>
+          <p class="key-error" id="keyErr" aria-live="polite"></p>
+          <p class="key-hint" id="keyHint" hidden>HINT — THE DEV IS ALREADY HERE.</p>
+        </form>
+      </div>
+
+      <section class="gate-seal" aria-label="Seal files before unlocking">
+        <div class="gs-head">
+          <h3>Seal a file</h3>
+          <span>SHA-256 · THIS DEVICE ONLY</span>
+        </div>
+        <div class="dz" id="dzGate" tabindex="0" role="button" aria-label="Upload files: click, drop, or paste">
+          <span class="dz-mark m1">+</span><span class="dz-mark m2">+</span>
+          <span class="dz-mark m3">+</span><span class="dz-mark m4">+</span>
+          <div class="dz-big">
+            <span class="dz-a"><em>Drop</em> a file</span>
+            <span class="dz-b" hidden>Release to seal.</span>
+          </div>
+          <div class="dz-sub">NO KEY NEEDED — DROP, CLICK TO BROWSE, OR PASTE</div>
+          <input type="file" id="fileInputGate" multiple hidden>
+        </div>
+        <div class="grows" id="gateRows" hidden></div>
+        <p class="gs-note">SEALED WITHOUT THE KEY — RECORDS INDEX LOCALLY &amp; APPEAR IN THE VAULT AFTER UNLOCK</p>
+      </section>
+
+      <footer class="gate-foot">
+        <span>ALL PROCESSING HAPPENS ON THIS DEVICE</span>
+        <span>SESSION <span id="sessionId">--------</span></span>
+      </footer>
+    </div>
+  </section>
+
+  <!-- ============ VAULT ============ -->
+  <main class="vault" id="vault" hidden>
+    <div class="vault-inner">
+
+      <header class="v-top rv">
+        <div class="brand">ZEN<span class="red">·</span>CRYPT</div>
+        <div class="v-status"><span class="sq-dot"></span> VAULT OPEN — <time id="vClock">--:--:--</time></div>
+        <button class="lock-btn" id="lockBtn" title="Lock vault"></button>
+      </header>
+
+      <section class="hero">
+        <h2 class="rv">Nothing leaves<br><em>this device</em><span class="sq-mark" aria-hidden="true"></span></h2>
+        <div class="hero-side rv">
+          <p>A zero-knowledge vault that lives entirely in your browser. Every file you seal is
+             fingerprinted with SHA-256 and written to on-device storage — no accounts,
+             no uploads, no servers in between.</p>
+          <div class="stats">
+            <div class="stat"><b id="statCount">00</b><span>RECORDS SEALED</span></div>
+            <div class="stat"><b id="statSize">0 B</b><span>ON THIS DEVICE</span></div>
+            <div class="stat"><b>00</b><span>SERVERS INVOLVED</span></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="dz rv" id="dz" tabindex="0" role="button" aria-label="Upload files: click, drop, or paste">
+        <span class="dz-mark m1">+</span><span class="dz-mark m2">+</span>
+        <span class="dz-mark m3">+</span><span class="dz-mark m4">+</span>
+        <div class="dz-big">
+          <span class="dz-a"><em>Seal</em> a file</span>
+          <span class="dz-b" hidden>Release to seal.</span>
+        </div>
+        <div class="dz-sub">DROP FILES ANYWHERE — OR CLICK TO BROWSE — PASTE WORKS TOO</div>
+        <input type="file" id="fileInput" multiple hidden>
+      </div>
+
+      <section class="rv">
+        <div class="ledger-top">
+          <h3>Sealed index</h3>
+          <span id="ledgerCount">00 RECORDS</span>
+        </div>
+        <div class="lhead">
+          <span>NO.</span><span>FILE</span>
+          <span class="c-hash">FINGERPRINT</span><span class="c-size">SIZE</span>
+          <span class="c-date">SEALED</span><span></span>
+        </div>
+        <div id="rows"></div>
+        <div class="empty" id="emptyBox">
+          <h4>The vault is empty.</h4>
+          <p>DROP A FILE ABOVE — IT WILL BE SEALED &amp; INDEXED LOCALLY</p>
+        </div>
+      </section>
+
+      <footer class="v-foot rv">
+        <span id="footStats">00 SEALED RECORDS · 0 B ON DEVICE · KEY VERIFIED</span>
+        <span>SHA-256 · INDEXEDDB · NO NETWORK CALLS</span>
+      </footer>
+
+    </div>
+  </main>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const p2 = n => String(n).padStart(2, '0');
+const HEX = '0123456789ABCDEF';
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* inline icon set (no external icon dependency) */
+const I = {
+  dl:'<path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/>',
+  trash:'<path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="m6 7 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6"/><path d="M14 11v6"/>',
+  eye:'<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/>',
+  eyeoff:'<path d="m4 4 16 16"/><path d="M10.6 6c.46-.07.93-.1 1.4-.1 6 0 9.5 6.1 9.5 6.1a17 17 0 0 1-2.4 3.1"/><path d="M6.7 6.9C4.1 8.6 2.5 12 2.5 12S6 18.5 12 18.5c1.5 0 2.9-.37 4.2-1"/><path d="M9.9 9.9a2.9 2.9 0 0 0 4.1 4.1"/>',
+  arrow:'<path d="M4 12h15"/><path d="m13 6 6 6-6 6"/>',
+  unlock:'<rect x="4.5" y="10.5" width="15" height="10" rx="1"/><path d="M8 10.5V7a4 4 0 0 1 7.7-1.5"/>',
+  x:'<path d="m6 6 12 12"/><path d="M18 6 6 18"/>',
+  check:'<path d="M5 12.5 10 17.5 19 7"/>',
+  spin:'<path d="M12 3a9 9 0 1 0 9 9"/>'
+};
+const icon = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n]}</svg>`;
+
+/* ================= hashing ================= */
+function fnvHex(u8){ // fallback fingerprint when WebCrypto is unavailable
+  let h = 0x811c9dc5;
+  for (let i = 0; i < u8.length; i++){ h ^= u8[i]; h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8,'0').repeat(8);
+}
+async function sha256Buf(buf){
+  if (crypto?.subtle){
+    const d = await crypto.subtle.digest('SHA-256', buf);
+    return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+  return fnvHex(new Uint8Array(buf));
+}
+const sha256Text = s => sha256Buf(new TextEncoder().encode(s).buffer);
+const shortHash = h => h ? h.slice(0,4) + '…' + h.slice(-4) : '········';
+
+/* ================= IndexedDB ================= */
+let db;
+const openDB = () => new Promise((res, rej) => {
+  const q = indexedDB.open('zencrypt', 1);
+  q.onupgradeneeded = () => q.result.createObjectStore('files', { keyPath: 'id' });
+  q.onsuccess = () => res(q.result);
+  q.onerror = () => rej(q.error);
+});
+const store = m => db.transaction('files', m).objectStore('files');
+const req = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const dbAll = () => req(store('readonly').getAll());
+const dbPut = rec => req(store('readwrite').put(rec));
+const dbDel = id  => req(store('readwrite').delete(id));
+
+/* ================= formatting ================= */
+function fmtSize(b){
+  if (b < 1024) return b + ' B';
+  const u = ['KB','MB','GB','TB']; let i = -1, n = b;
+  do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+  return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + u[i];
+}
+function fmtDate(ts){
+  const d = new Date(ts);
+  return `${d.getFullYear()}.${p2(d.getMonth()+1)}.${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+function extLabel(r){
+  const m = (r.name.match(/\.([a-z0-9]{1,4})$/i) || [])[1];
+  return (m || (r.type || '').split('/')[1] || 'file').toUpperCase().slice(0,4);
+}
+const uid = () => crypto.randomUUID
+  ? crypto.randomUUID()
+  : [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2,'0')).join('');
+
+/* ================= tiny sound design ================= */
+let AC;
+function beep(kind){
+  if (RM) return;
+  try{
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    const t = AC.currentTime, o = AC.createOscillator(), g = AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    if (kind === 'thunk'){
+      o.type='sine'; o.frequency.setValueAtTime(150,t); o.frequency.exponentialRampToValueAtTime(46,t+.16);
+      g.gain.setValueAtTime(.001,t); g.gain.exponentialRampToValueAtTime(.28,t+.015); g.gain.exponentialRampToValueAtTime(.001,t+.22);
+      o.start(t); o.stop(t+.24);
+    } else if (kind === 'deny'){
+      o.type='sawtooth'; o.frequency.setValueAtTime(120,t);
+      g.gain.setValueAtTime(.06,t); g.gain.exponentialRampToValueAtTime(.001,t+.14);
+      o.start(t); o.stop(t+.15);
+    } else {
+      o.type='sine'; o.frequency.setValueAtTime(740,t);
+      g.gain.setValueAtTime(.001,t); g.gain.exponentialRampToValueAtTime(.07,t+.01); g.gain.exponentialRampToValueAtTime(.001,t+.09);
+      o.start(t); o.stop(t+.1);
+    }
+  }catch(e){}
+}
+
+/* ================= toasts ================= */
+const toasts = $('#toasts');
+function toast(msg, kind = 'ok'){
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.innerHTML = `${icon(kind === 'err' ? 'x' : 'check')}<span></span>`;
+  el.lastElementChild.textContent = msg;
+  toasts.appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('show')));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 380); }, 3400);
+}
+
+/* ================= text scramble ================= */
+const SCR = '0123456789ABCDEF#%&$+<>*';
+function scramble(el, final, dur){
+  if (RM || dur <= 0){ el.textContent = final; return; }
+  const arr = [...final], t0 = performance.now();
+  (function tick(t){
+    const p = Math.min(1, (t - t0) / dur);
+    const k = Math.floor(p * arr.length);
+    let s = arr.slice(0, k).join('');
+    for (let i = k; i < arr.length; i++) s += SCR[(Math.random() * SCR.length) | 0];
+    el.textContent = s;
+    if (p < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+
+/* ================= cipher ring ================= */
+const NS = 'http://www.w3.org/2000/svg';
+const gChars = $('#gChars'), gTicks = $('#gTicks'), chars = [];
+(function buildRing(){
+  for (let i = 0; i < 40; i++){
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', 0); t.setAttribute('y', -208);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('transform', `rotate(${i * 9})`);
+    t.textContent = HEX[i % 16];
+    gChars.appendChild(t); chars.push(t);
+  }
+  for (let i = 0; i < 72; i++){
+    const l = document.createElementNS(NS, 'line');
+    const major = i % 6 === 0;
+    l.setAttribute('y1', major ? -164 : -170); l.setAttribute('y2', -177);
+    l.setAttribute('transform', `rotate(${i * 5})`);
+    if (major) l.classList.add('tk-a');
+    gTicks.appendChild(l);
+  }
+})();
+let angle = 0, angle2 = 0, boost = 0, scrollSpin = 0, last = performance.now();
+(function loop(t){
+  const dt = Math.min(.05, (t - last) / 1000); last = t;
+  boost = Math.max(0, boost - dt * .9);
+  const sp = RM ? 0 : 7 + boost * 70;
+  angle = (angle + sp * dt) % 360;
+  angle2 = (angle2 - sp * .45 * dt) % 360;
+  gChars.setAttribute('transform', `rotate(${angle + scrollSpin})`);
+  gTicks.setAttribute('transform', `rotate(${angle2 - scrollSpin})`);
+  requestAnimationFrame(loop);
+})(last);
+function jitterChars(n){
+  for (let i = 0; i < n; i++){
+    const el = chars[(Math.random() * chars.length) | 0];
+    el.textContent = HEX[(Math.random() * 16) | 0];
+    el.classList.add('hot');
+    setTimeout(() => el.classList.remove('hot'), 300 + Math.random() * 250);
+  }
+}
+
+/* ================= records / ledger ================= */
+const rowsBox = $('#rows'), emptyBox = $('#emptyBox');
+const records = new Map();
+
+const actionsHTML = () =>
+  `<button class="act" data-act="dl" title="Retrieve file" aria-label="Retrieve file">${icon('dl')}</button>` +
+  `<button class="act danger" data-act="del" title="Purge record" aria-label="Purge record">${icon('trash')}</button>`;
+
+function rowEl(rec, pending){
+  const el = document.createElement('div');
+  el.className = 'row'; el.dataset.id = rec.id;
+  el.innerHTML = `
+    <span class="c-idx">00</span>
+    <div class="c-file">
+      <span class="f-dot ${pending ? 'pend' : ''}"></span>
+      <span class="f-name"></span>
+      <span class="f-chip">${extLabel(rec)}</span>
+      <span class="f-state ${pending ? 'pend' : ''}">${pending ? 'SEALING' : 'SEALED'}</span>
+    </div>
+    <span class="c-hash">${rec.hash ? shortHash(rec.hash) : '········'}</span>
+    <span class="c-size">${fmtSize(rec.size)}</span>
+    <span class="c-date">${fmtDate(rec.date)}</span>
+    <div class="c-act">${actionsHTML()}</div>`;
+  el.querySelector('.f-name').textContent = rec.name; // safe: filename as text
+  return el;
+}
+function renumber(){
+  [...rowsBox.children].forEach((el, i) => el.querySelector('.c-idx').textContent = p2(i + 1));
+}
+function refreshStats(){
+  const rs = [...records.values()];
+  const n = rs.length, bytes = rs.reduce((s, r) => s + (r.size || 0), 0);
+  $('#statCount').textContent = p2(n);
+  $('#statSize').textContent = fmtSize(bytes);
+  $('#ledgerCount').textContent = `${p2(n)} RECORD${n === 1 ? '' : 'S'}`;
+  $('#footStats').textContent = `${p2(n)} SEALED RECORDS · ${fmtSize(bytes)} ON DEVICE · KEY VERIFIED`;
+  emptyBox.hidden = n > 0;
+}
+async function loadRecords(){
+  try{
+    const all = (await dbAll()).sort((a, b) => b.date - a.date);
+    for (const r of all){
+      records.set(r.id, r);
+      const el = rowEl(r, false);
+      el.querySelector('.c-hash').textContent = shortHash(r.hash || '');
+      rowsBox.appendChild(el);
+    }
+    renumber(); refreshStats();
+  }catch(e){
+    toast('Local vault unavailable in this browser', 'err');
+  }
+}
+
+/* ---- sealing ---- */
+async function sealOne(f, delay){
+  if (delay) await wait(delay);
+  const rec = { id: uid(), name: f.name, size: f.size, type: f.type || '', date: Date.now(), hash: '', blob: f };
+  const el = rowEl(rec, true);
+  rowsBox.prepend(el); records.set(rec.id, rec);
+  renumber(); emptyBox.hidden = true;
+
+  let buf = null;
+  try{ buf = await f.arrayBuffer(); }catch(e){}
+  rec.hash = buf ? await sha256Buf(buf)
+                 : fnvHex(new TextEncoder().encode(f.name + ':' + f.size));
+  try{ await dbPut(rec); }
+  catch(e){ toast('Storage failed — record kept for this session only', 'err'); }
+
+  const dur = RM ? 0 : 720 + Math.random() * 380;
+  scramble(el.querySelector('.f-name'), rec.name, dur);
+  scramble(el.querySelector('.c-hash'), shortHash(rec.hash), dur);
+  await wait(dur + 120);
+  el.querySelector('.f-dot').classList.remove('pend');
+  const st = el.querySelector('.f-state');
+  st.textContent = 'SEALED'; st.classList.remove('pend');
+  beep('seal');
+}
+async function sealFiles(list){
+  const files = [...list];
+  if (!files.length) return;
+  await Promise.all(files.map((f, i) => sealOne(f, i * 220)));
+  refreshStats();
+  toast(files.length === 1 ? `${files[0].name} sealed` : `${files.length} files sealed — index updated`);
+}
+
+/* ---- row actions ---- */
+function armDelete(row){
+  rowsBox.querySelectorAll('.row.confirm').forEach(r => { if (r !== row) disarm(r); });
+  row.classList.add('confirm');
+  row.querySelector('.c-act').innerHTML =
+    `<span class="cf-label">PURGE?</span>` +
+    `<button class="act cf-yes" data-act="yes">YES</button>` +
+    `<button class="act" data-act="no">NO</button>`;
+}
+function disarm(row){
+  row.classList.remove('confirm');
+  row.querySelector('.c-act').innerHTML = actionsHTML();
+}
+async function doDelete(row, id){
+  const rec = records.get(id);
+  row.style.height = row.offsetHeight + 'px'; void row.offsetHeight;
+  row.style.transition = 'height .38s var(--ease),opacity .3s,padding .38s,border-color .38s';
+  row.classList.add('gone'); row.style.height = '0px';
+  try{ await dbDel(id); }catch(e){}
+  records.delete(id);
+  setTimeout(() => { row.remove(); renumber(); refreshStats(); }, 400);
+  toast(`Purged — ${rec ? rec.name : 'record'}`, 'err');
+}
+function download(id){
+  const r = records.get(id);
+  if (!r || !r.blob){ toast('Record not found', 'err'); return; }
+  const url = URL.createObjectURL(r.blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = r.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast(`Retrieved — ${r.name}`);
+}
+rowsBox.addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const row = e.target.closest('.row'), id = row.dataset.id;
+  if (b.dataset.act === 'dl') download(id);
+  else if (b.dataset.act === 'del') armDelete(row);
+  else if (b.dataset.act === 'yes') doDelete(row, id);
+  else if (b.dataset.act === 'no') disarm(row);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') rowsBox.querySelectorAll('.row.confirm').forEach(disarm);
+});
+
+/* ================= gate & unlock ================= */
+const gate = $('#gate'), vault = $('#vault'), form = $('#keyForm'), input = $('#keyInput');
+const goBtn = $('#goBtn'), keyErr = $('#keyErr'), keyHint = $('#keyHint'), stamp = $('#stamp');
+const KEY = 'devwillbethere';
+let KEY_HASH = '', busy = false, attempts = 0;
+sha256Text(KEY).then(h => KEY_HASH = h);
+
+function deny(empty){
+  attempts++;
+  keyErr.textContent = empty ? 'KEY REQUIRED' : `ACCESS DENIED — ATTEMPT ${p2(attempts)}`;
+  if (attempts >= 2) keyHint.hidden = false;
+  form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake');
+  gate.classList.add('deny'); setTimeout(() => gate.classList.remove('deny'), 600);
+  beep('deny');
+  input.value = ''; input.focus();
+}
+function unlock(){
+  busy = true;
+  keyErr.textContent = ''; input.blur();
+  goBtn.innerHTML = icon('spin'); goBtn.classList.add('busy');
+  boost = 9; // ring spins up
+  setTimeout(() => { stamp.hidden = false; stamp.classList.add('show'); beep('thunk'); }, 420);
+  setTimeout(() => document.body.classList.add('doors-closed'), 1150);
+  setTimeout(() => beep('thunk'), 1860); // doors meet
+  setTimeout(() => {
+    stamp.hidden = true; stamp.classList.remove('show');
+    gate.classList.add('off');
+    document.body.classList.remove('gated');
+    vault.hidden = false; void vault.offsetHeight; vault.classList.add('in');
+  }, 1900);
+  setTimeout(() => document.body.classList.remove('doors-closed'), 2150);
+  setTimeout(() => {
+    goBtn.classList.remove('busy'); goBtn.innerHTML = icon('arrow');
+    input.value = ''; busy = false;
+    toast('Vault open — access key verified');
+  }, 3050);
+}
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  if (busy) return;
+  const v = input.value.trim();
+  if (!v){ deny(true); return; }
+  busy = true;
+  goBtn.innerHTML = icon('spin'); goBtn.classList.add('busy');
+  const keyHash = KEY_HASH || await sha256Text(KEY);
+  const h = await sha256Text(v);
+  if (h === keyHash){ unlock(); }
+  else {
+    deny(false);
+    busy = false;
+    goBtn.classList.remove('busy'); goBtn.innerHTML = icon('arrow');
+  }
+});
+input.addEventListener('input', () => {
+  boost = Math.min(3.5, boost + .4);
+  if (!RM) jitterChars(3);
+});
+ $('#eyeBtn').addEventListener('click', () => {
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  $('#eyeBtn').innerHTML = icon(show ? 'eyeoff' : 'eye');
+  input.focus();
+});
+
+function lockVault(){
+  if (busy || vault.hidden) return;
+  busy = true;
+  document.body.classList.add('doors-closed');
+  setTimeout(() => beep('thunk'), 700);
+  setTimeout(() => {
+    vault.hidden = true; vault.classList.remove('in');
+    gate.classList.remove('off');
+    gateInner.scrollTop = 0; // lock view returns to the key, not the seal section
+    document.body.classList.add('gated');
+    attempts = 0; keyHint.hidden = true; keyErr.textContent = '';
+    input.value = '';
+  }, 780);
+  setTimeout(() => document.body.classList.remove('doors-closed'), 1050);
+  setTimeout(() => { busy = false; input.focus(); }, 1900);
+}
+
+/* ================= uploads: click / drop / paste ================= */
+const dz = $('#dz'), dzGate = $('#dzGate'), fileInput = $('#fileInput');
+const activeDz = () => vault.hidden ? dzGate : dz;
+function dzOver(el, on){
+  el.classList.toggle('over', on);
+  el.querySelector('.dz-a').hidden = on;
+  el.querySelector('.dz-b').hidden = !on;
+}
+[dz, dzGate].forEach(el => {
+  el.addEventListener('click', () => fileInput.click());
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fileInput.click(); } });
+});
+fileInput.addEventListener('change', () => { sealFiles(fileInput.files); fileInput.value = ''; });
+
+let dragDepth = 0;
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('dragenter', e => {
+  e.preventDefault();
+  if (!e.dataTransfer?.types?.includes('Files')) return;
+  dragDepth++; dzOver(activeDz(), true);
+});
+window.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) [dz, dzGate].forEach(el => dzOver(el, false));
+});
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  dragDepth = 0; [dz, dzGate].forEach(el => dzOver(el, false));
+  if (!e.dataTransfer?.files?.length) return;
+  sealFiles(e.dataTransfer.files);
+});
+window.addEventListener('paste', e => {
+  const fs = e.clipboardData?.files;
+  if (fs && fs.length) sealFiles(fs);
+});
+
+/* scroll-driven ring spin — the home page scrolls now */
+const gateInner = document.querySelector('.gate-inner');
+let lastSpinY = 0;
+gateInner.addEventListener('scroll', () => {
+  const y = gateInner.scrollTop;
+  scrollSpin = y * .35;
+  boost = Math.min(9, boost + Math.abs(y - lastSpinY) * .01);
+  lastSpinY = y;
+}, { passive: true });
+
+/* ================= boot ================= */
+ $('#eyeBtn').innerHTML = icon('eye');
+ $('#goBtn').innerHTML = icon('arrow');
+ $('#lockBtn').innerHTML = icon('unlock') + '<span>LOCK</span>';
+ $('#lockBtn').addEventListener('click', lockVault);
+ $('#sessionId').textContent = [...crypto.getRandomValues(new Uint8Array(4))]
+  .map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
+
+const clocks = [$('#gateClock'), $('#vClock')];
+function tickClock(){
+  const d = new Date();
+  const t = `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+  clocks.forEach(c => c.textContent = t);
+}
+tickClock(); setInterval(tickClock, 1000);
+
+/* entrance stagger order for the vault */
+document.querySelectorAll('#vault .rv').forEach((el, i) => el.style.transitionDelay = (0.07 * i) + 's');
+
+if (!matchMedia('(pointer:coarse)').matches) input.focus();
+openDB().then(d => { db = d; loadRecords(); }).catch(() => toast('Local vault unavailable in this browser', 'err'));
+</script>
+</body>
+</html>

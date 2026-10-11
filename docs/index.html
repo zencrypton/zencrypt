@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#F2EEE3">
+<title>ZENCRYPT — Local File Vault</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta name="description" content="ZENCRYPT is a private, browser-local file vault. Files stay in this browser IndexedDB - nothing is uploaded to a server.">
+<link rel="stylesheet" href="assets/css/style.css">
+
+</head>
+<body class="gated">
+
+  <!-- vault doors -->
+  <div class="door d-top"><i>ZENCRYPT — VAULT DOOR 01</i></div>
+  <div class="door d-bot"><i>ZENCRYPT — VAULT DOOR 02</i></div>
+
+  <!-- stamp -->
+  <div class="stamp" id="stamp" hidden><div class="stamp-inner">ACCESS GRANTED</div></div>
+
+  <!-- left rail -->
+  <aside class="rail" aria-hidden="true">
+    <span class="rail-tag">ENCRYPTED FILE VAULT — EST. MMXXV</span>
+    <span class="rail-seal"></span>
+  </aside>
+
+  <!-- ============ GATE ============ -->
+  <section class="gate" id="gate">
+    <div class="gate-inner">
+      <header class="gate-top">
+        <span>ZENCRYPT SYSTEMS — LOCAL VAULT Nº 001</span>
+        <span>LOCAL <time id="gateClock">--:--:--</time></span>
+      </header>
+
+      <div class="gate-mid">
+        <div class="ring-wrap">
+          <svg id="ring" viewBox="-230 -230 460 460" aria-hidden="true">
+            <circle r="224"/><circle r="199" class="c-d1"/>
+            <circle r="150"/><circle r="122" class="c-d1"/>
+            <g class="cross">
+              <line x1="-152" x2="-188"/><line x1="152" x2="188"/>
+              <line y1="-152" y2="-188"/><line y1="152" y2="188"/>
+            </g>
+            <g id="gTicks"></g>
+            <g id="gChars"></g>
+          </svg>
+          <div class="wordmark">
+            <h1>ZEN<span class="red">·</span>CRYPT</h1>
+            <span class="wm-sub">LOCAL ENCRYPTION VAULT</span>
+          </div>
+        </div>
+
+        <form class="key-form" id="keyForm" autocomplete="off" novalidate>
+          <label for="keyInput"><span>ACCESS KEY</span><b>*</b></label>
+          <div class="key-row">
+            <input id="keyInput" type="password" placeholder="········" autocomplete="off"
+                   autocapitalize="off" spellcheck="false" aria-label="Access key">
+            <button type="button" class="kbtn" id="eyeBtn" title="Show / hide key" aria-label="Show or hide key"></button>
+            <button type="submit" class="kbtn go" id="goBtn" title="Unlock vault" aria-label="Unlock vault"></button>
+          </div>
+          <p class="key-error" id="keyErr" aria-live="polite"></p>
+          <p class="key-hint" id="keyHint" hidden>HINT — THE DEV IS ALREADY HERE.</p>
+        </form>
+      </div>
+
+      <section class="gate-seal" aria-label="Seal files before unlocking">
+        <div class="gs-head">
+          <h3>Seal a file</h3>
+          <span>SHA-256 · THIS DEVICE ONLY</span>
+        </div>
+        <div class="dz" id="dzGate" tabindex="0" role="button" aria-label="Upload files: click, drop, or paste">
+          <span class="dz-mark m1">+</span><span class="dz-mark m2">+</span>
+          <span class="dz-mark m3">+</span><span class="dz-mark m4">+</span>
+          <div class="dz-big">
+            <span class="dz-a"><em>Drop</em> a file</span>
+            <span class="dz-b" hidden>Release to seal.</span>
+          </div>
+          <div class="dz-sub">NO KEY NEEDED — DROP, CLICK TO BROWSE, OR PASTE</div>
+          <input type="file" id="fileInputGate" multiple hidden>
+        </div>
+        <div class="grows" id="gateRows" hidden></div>
+        <p class="gs-note">SEALED WITHOUT THE KEY — RECORDS INDEX LOCALLY &amp; APPEAR IN THE VAULT AFTER UNLOCK</p>
+      </section>
+
+      <footer class="gate-foot">
+        <span>ALL PROCESSING HAPPENS ON THIS DEVICE</span>
+        <span>SESSION <span id="sessionId">--------</span></span>
+      </footer>
+    </div>
+  </section>
+
+  <!-- ============ VAULT ============ -->
+  <main class="vault" id="vault" hidden>
+    <div class="vault-inner">
+
+      <header class="v-top rv">
+        <div class="brand">ZEN<span class="red">·</span>CRYPT</div>
+        <div class="v-status"><span class="sq-dot"></span> VAULT OPEN — <time id="vClock">--:--:--</time></div>
+        <button class="lock-btn" id="lockBtn" title="Lock vault"></button>
+      </header>
+
+      <section class="hero">
+        <h2 class="rv">Nothing leaves<br><em>this device</em><span class="sq-mark" aria-hidden="true"></span></h2>
+        <div class="hero-side rv">
+          <p>A zero-knowledge vault that lives entirely in your browser. Every file you seal is
+             fingerprinted with SHA-256 and written to on-device storage — no accounts,
+             no uploads, no servers in between.</p>
+          <div class="stats">
+            <div class="stat"><b id="statCount">00</b><span>RECORDS SEALED</span></div>
+            <div class="stat"><b id="statSize">0 B</b><span>ON THIS DEVICE</span></div>
+            <div class="stat"><b>00</b><span>SERVERS INVOLVED</span></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="dz rv" id="dz" tabindex="0" role="button" aria-label="Upload files: click, drop, or paste">
+        <span class="dz-mark m1">+</span><span class="dz-mark m2">+</span>
+        <span class="dz-mark m3">+</span><span class="dz-mark m4">+</span>
+        <div class="dz-big">
+          <span class="dz-a"><em>Seal</em> a file</span>
+          <span class="dz-b" hidden>Release to seal.</span>
+        </div>
+        <div class="dz-sub">DROP FILES ANYWHERE — OR CLICK TO BROWSE — PASTE WORKS TOO</div>
+        <input type="file" id="fileInput" multiple hidden>
+      </div>
+
+      <section class="rv">
+        <div class="ledger-top">
+          <h3>Sealed index</h3>
+          <span id="ledgerCount">00 RECORDS</span>
+        </div>
+        <div class="lhead">
+          <span>NO.</span><span>FILE</span>
+          <span class="c-hash">FINGERPRINT</span><span class="c-size">SIZE</span>
+          <span class="c-date">SEALED</span><span></span>
+        </div>
+        <div id="rows"></div>
+        <div class="empty" id="emptyBox">
+          <h4>The vault is empty.</h4>
+          <p>DROP A FILE ABOVE — IT WILL BE SEALED &amp; INDEXED LOCALLY</p>
+        </div>
+      </section>
+
+      <footer class="v-foot rv">
+        <span id="footStats">00 SEALED RECORDS · 0 B ON DEVICE · KEY VERIFIED</span>
+        <span>SHA-256 · INDEXEDDB · NO NETWORK CALLS</span>
+      </footer>
+
+    </div>
+  </main>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="assets/js/app.js"></script>
+</body>
+</html>
